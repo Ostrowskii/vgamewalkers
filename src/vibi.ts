@@ -19,6 +19,8 @@ export class Vibi<S, P> {
   tolerance:   number;
   room_posts:  Map<number, Post<P>>;
   local_posts: Map<string, Post<P>>; // predicted local posts keyed by name
+  state_cache: S[];                  // cached states keyed by tick offset
+  cache_start: number | null;        // tick corresponding to state_cache[0]
 
   // Compute the authoritative time a post takes effect.
   private official_time(post: Post<P>): number {
@@ -32,6 +34,29 @@ export class Vibi<S, P> {
   // Convert a post into its authoritative tick.
   private official_tick(post: Post<P>): number {
     return this.time_to_tick(this.official_time(post));
+  }
+
+  // Reset all cached states.
+  private reset_cache(): void {
+    this.state_cache.length = 0;
+    this.cache_start = null;
+  }
+
+  // Drop cached states from the provided tick (inclusive) onward.
+  private invalidate_cache(from_tick: number): void {
+    if (this.cache_start === null) {
+      return;
+    }
+
+    const drop_from = from_tick - this.cache_start;
+    if (drop_from <= 0) {
+      this.reset_cache();
+      return;
+    }
+
+    if (drop_from < this.state_cache.length) {
+      this.state_cache.length = drop_from;
+    }
   }
 
   constructor(
@@ -52,17 +77,22 @@ export class Vibi<S, P> {
     this.tolerance   = tolerance;
     this.room_posts  = new Map();
     this.local_posts = new Map();
+    this.state_cache = [];
+    this.cache_start = null;
 
     // Wait for initial time sync before interacting with server
     client.on_sync(() => {
       console.log(`[VIBI] synced; watching+loading room=${this.room}`);
       // Watch the room with callback
       client.watch(this.room, (post) => {
+        const official_tick = this.official_tick(post);
+
         // If this official post matches a local predicted one, drop the local copy
         if (post.name && this.local_posts.has(post.name)) {
           this.local_posts.delete(post.name);
         }
         this.room_posts.set(post.index, post);
+        this.invalidate_cache(official_tick);
       });
 
       // Load all existing posts
@@ -122,17 +152,7 @@ export class Vibi<S, P> {
     return this.time_to_tick(t);
   }
 
-  compute_state_at(at_tick: number): S {
-    const initial_tick = this.initial_tick();
-
-    if (initial_tick === null) {
-      return this.init;
-    }
-
-    if (at_tick < initial_tick) {
-      return this.init;
-    }
-
+  private build_timeline(): Map<number, Post<P>[]> {
     const timeline = new Map<number, Post<P>[]>();
 
     for (const post of this.room_posts.values()) {
@@ -156,14 +176,58 @@ export class Vibi<S, P> {
       posts.sort((a, b) => a.index - b.index);
     }
 
-    let state = this.init;
+    return timeline;
+  }
 
-    for (let tick = initial_tick; tick <= at_tick; tick++) {
+  compute_state_at(at_tick: number): S {
+    const initial_tick = this.initial_tick();
+
+    if (initial_tick === null) {
+      this.reset_cache();
+      return this.init;
+    }
+
+    if (at_tick < initial_tick) {
+      return this.init;
+    }
+
+    if (this.cache_start !== initial_tick) {
+      this.state_cache.length = 0;
+      this.cache_start = initial_tick;
+    }
+
+    const timeline   = this.build_timeline();
+    let state: S     = this.init;
+    let start_tick   = initial_tick;
+
+    if (this.cache_start !== null && this.state_cache.length > 0) {
+      const highest_cached_tick = this.cache_start + this.state_cache.length - 1;
+      const usable_cached_tick  = Math.min(highest_cached_tick, at_tick);
+      const cache_index         = usable_cached_tick - this.cache_start;
+      if (cache_index >= 0) {
+        state      = this.state_cache[cache_index];
+        start_tick = usable_cached_tick + 1;
+        if (start_tick > at_tick) {
+          return state;
+        }
+      }
+    }
+
+    for (let tick = start_tick; tick <= at_tick; tick++) {
       state = this.on_tick(state);
 
       const posts = timeline.get(tick) || [];
       for (const post of posts) {
         state = this.on_post(post.data, state);
+      }
+
+      if (this.cache_start !== null) {
+        const cacheIndex = tick - this.cache_start;
+        if (cacheIndex === this.state_cache.length) {
+          this.state_cache.push(state);
+        } else if (cacheIndex >= 0 && cacheIndex < this.state_cache.length) {
+          this.state_cache[cacheIndex] = state;
+        }
       }
     }
 
@@ -185,6 +249,7 @@ export class Vibi<S, P> {
     };
 
     this.local_posts.set(name, local_post);
+    this.invalidate_cache(this.official_tick(local_post));
   }
 
   compute_current_state(): S {
