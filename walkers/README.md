@@ -57,5 +57,3 @@ Open http://localhost:8080 in your browser. You'll be prompted for:
 - **Tolerance**: 300ms for network lag compensation
 
 Open multiple browser windows/tabs with the same room name to see multiplayer in action!
-
-lucy can modify this repo now

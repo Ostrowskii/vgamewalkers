@@ -25,7 +25,7 @@ type GamePost =
 
 // Game configuration
 const TICK_RATE         = 24; // ticks per second
-const TOLERANCE         = 300; // milliseconds
+const TOLERANCE         = 10; // milliseconds (correct this)
 const PIXELS_PER_SECOND = 200;
 const PIXELS_PER_TICK   = PIXELS_PER_SECOND / TICK_RATE;
 
