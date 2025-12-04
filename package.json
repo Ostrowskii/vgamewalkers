@@ -1,0 +1,17 @@
+{
+  "name": "vibi",
+  "type": "module",
+  "scripts": {
+    "check": "tsc --target esnext --noEmit --skipLibCheck",
+    "dev": "bun run index.ts",
+    "server": "bun run src/server.ts",
+    "client": "bun run client_cli.ts",
+    "deploy": "bash scripts/deploy.sh"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.13"
+  }
+}
