@@ -6,9 +6,9 @@ import { readFile } from "fs/promises";
 // Build walkers bundle on startup (idempotent)
 async function build_walkers() {
   try {
-    const r1 = Bun.spawnSync({ cmd: ["bun", "build", "src/client.ts", "--outdir", "walkers/dist", "--target=browser", "--format=esm"] });
-    const r2 = Bun.spawnSync({ cmd: ["bun", "build", "src/vibi.ts", "--outdir", "walkers/dist", "--target=browser", "--format=esm"] });
-    const r3 = Bun.spawnSync({ cmd: ["bun", "build", "walkers/index.ts", "--outdir", "walkers/dist", "--target=browser", "--format=esm"] });
+    const r1 = Bun.spawnSync({ cmd: ["bun", "build", "src/client.ts", "--outdir", "walkers/dist", "--target=browser", "--format=esm", "--sourcemap"] });
+    const r2 = Bun.spawnSync({ cmd: ["bun", "build", "src/vibi.ts", "--outdir", "walkers/dist", "--target=browser", "--format=esm", "--sourcemap"] });
+    const r3 = Bun.spawnSync({ cmd: ["bun", "build", "walkers/index.ts", "--outdir", "walkers/dist", "--target=browser", "--format=esm", "--sourcemap"] });
     if (!r1.success || !r2.success || !r3.success) {
       console.error("[BUILD] walkers build failed", { r1: r1.success, r2: r2.success, r3: r3.success });
     } else {

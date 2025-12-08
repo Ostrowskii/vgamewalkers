@@ -7,3 +7,8 @@ to do so while avoiding space waste, we'll use an immutable rollback list (a log
 DUVIDAS ---- 
 
 The walker game works like this: a player enters in a room, types the letter it want to represent and the game is a white canvas where the players can move their choosen letters with AWSD keys, and the game runs at 24 ticks per second, with means that a player that enters 10 hours after the room is created will have to compute 24 * 60 * 60 * 10 = 864.000 ticks, and that said, 864.000 state will be saved in the array states, right (am i wrong?)? Won't that lag too much at the beginning when the user first enters the room and won't the array be too expensive to hold at hour 10?
+
+ Is there a way to improve the function build_timeline so it be more performative? the way that is it doing right now is: it takes room.posts, loop througout it,
+  and then loop in local_posts (and adds index to a MAX_SAFE_INTEGER), and sort it out. I know this is important to ensure that if a official post arrives later,
+  it can be put in order. However, i bet this is consuming, right? Is it common or even a good idea to just sort for ticks that are above 2-5 minutes and keep
+  timeline static for posts/ticks older than 2-5 minutes instead of looping 2 times and then sorting everything all over again?
