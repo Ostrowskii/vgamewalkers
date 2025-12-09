@@ -35,3 +35,6 @@ walkers/.serve.pid
 
 # Local scratch
 .stuff/
+
+# Prompts
+Prompt.md
