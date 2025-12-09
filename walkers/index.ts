@@ -28,18 +28,28 @@ const TICK_RATE         = 24; // ticks per second
 const TOLERANCE         = 10; // milliseconds (correct this)
 const PIXELS_PER_SECOND = 200;
 const PIXELS_PER_TICK   = PIXELS_PER_SECOND / TICK_RATE;
+const WORLD_WIDTH       = 1920;  // logical world width in pixels
+const WORLD_HEIGHT      = 1080;  // logical world height in pixels
+const PLAYER_MARGIN     = 12;    // keep the glyph fully visible
 
 // Initial state: empty map
 const initial: GameState = {};
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
 
 // on_tick: update player positions based on WASD state
 function on_tick(state: GameState): GameState {
   const new_state: GameState = {};
 
   for (const [char, player] of Object.entries(state)) {
+    const next_px = player.px + (player.d * PIXELS_PER_TICK) + (player.a * -PIXELS_PER_TICK);
+    const next_py = player.py + (player.s * PIXELS_PER_TICK) + (player.w * -PIXELS_PER_TICK);
+
     new_state[char] = {
-      px: player.px + (player.d * PIXELS_PER_TICK) + (player.a * -PIXELS_PER_TICK),
-      py: player.py + (player.s * PIXELS_PER_TICK) + (player.w * -PIXELS_PER_TICK),
+      px: clamp(next_px, PLAYER_MARGIN, WORLD_WIDTH  - PLAYER_MARGIN),
+      py: clamp(next_py, PLAYER_MARGIN, WORLD_HEIGHT - PLAYER_MARGIN),
       w: player.w,
       a: player.a,
       s: player.s,
@@ -54,7 +64,20 @@ function on_tick(state: GameState): GameState {
 function on_post(post: GamePost, state: GameState): GameState {
   switch (post.$) {
     case "spawn": {
-      const player = { px: 200, py: 200, w: 0, a: 0, s: 0, d: 0 };
+      // Ignore duplicate spawns for a player that's already in the state so we
+      // don't rewind their position when they reconnect.
+      if (state[post.nick]) {
+        return state;
+      }
+
+      const player = {
+        px: clamp(post.px, PLAYER_MARGIN, WORLD_WIDTH  - PLAYER_MARGIN),
+        py: clamp(post.py, PLAYER_MARGIN, WORLD_HEIGHT - PLAYER_MARGIN),
+        w: 0,
+        a: 0,
+        s: 0,
+        d: 0
+      };
       return { ...state, [post.nick]: player };
     }
     case "down": {
@@ -144,6 +167,8 @@ function render() {
 
   const curr_tick = game.server_tick();
   const state     = game.compute_render_state();
+  const scale_x   = canvas.width / WORLD_WIDTH;
+  const scale_y   = canvas.height / WORLD_HEIGHT;
 
   ctx.fillStyle    = "#000";
   ctx.font         = "14px monospace";
@@ -171,8 +196,8 @@ function render() {
   ctx.textBaseline = "middle";
 
   for (const [char, player] of Object.entries(state)) {
-    const x = Math.floor(player.px);
-    const y = Math.floor(player.py);
+    const x = Math.floor(player.px * scale_x);
+    const y = Math.floor(player.py * scale_y);
     ctx.fillText(char, x, y);
   }
 }
