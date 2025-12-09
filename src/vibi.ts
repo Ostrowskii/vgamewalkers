@@ -21,6 +21,7 @@ export class Vibi<S, P> {
   local_posts: Map<string, Post<P>>; // predicted local posts keyed by name
   state_cache: S[];                  // cached states keyed by tick offset
   cache_start: number | null;        // tick corresponding to state_cache[0]
+  timeline:    Map<number, Post<P>[]> | null; // cached timeline of posts per tick
 
   // Compute the authoritative time a post takes effect.
   private official_time(post: Post<P>): number {
@@ -44,6 +45,8 @@ export class Vibi<S, P> {
 
   // Drop cached states from the provided tick (inclusive) onward.
   private invalidate_cache(from_tick: number): void {
+    this.invalidate_timeline();
+
     if (this.cache_start === null) {
       return;
     }
@@ -57,6 +60,11 @@ export class Vibi<S, P> {
     if (drop_from < this.state_cache.length) {
       this.state_cache.length = drop_from;
     }
+  }
+
+  // Invalidate the cached timeline so it will be rebuilt lazily.
+  private invalidate_timeline(): void {
+    this.timeline = null;
   }
 
   constructor(
@@ -79,6 +87,7 @@ export class Vibi<S, P> {
     this.local_posts = new Map();
     this.state_cache = [];
     this.cache_start = null;
+    this.timeline    = null;
 
     // Wait for initial time sync before interacting with server
     client.on_sync(() => {
@@ -153,6 +162,10 @@ export class Vibi<S, P> {
   }
 
   private build_timeline(): Map<number, Post<P>[]> {
+    if (this.timeline) {
+      return this.timeline;
+    }
+
     const timeline = new Map<number, Post<P>[]>();
 
     for (const post of this.room_posts.values()) {
@@ -176,6 +189,7 @@ export class Vibi<S, P> {
       posts.sort((a, b) => a.index - b.index);
     }
 
+    this.timeline = timeline;
     return timeline;
   }
 
