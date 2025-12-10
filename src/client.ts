@@ -12,7 +12,9 @@ const time_sync: TimeSync = {
   last_ping: Infinity,
 };
 
-const ws = new WebSocket(`ws://${window.location.hostname}:8080`);
+import { WS_URL } from "./config.ts";
+
+const ws = new WebSocket(WS_URL);
 
 type MessageHandler = (message: any) => void;
 const room_watchers = new Map<string, MessageHandler>();
