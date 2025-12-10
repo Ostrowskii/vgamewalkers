@@ -2,6 +2,49 @@ var __defProp = Object.defineProperty;
 var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
 var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
 
+// src/config.ts
+var REMOTE_WSS = "wss://game.vibistudiotest.site";
+function has_window() {
+  return typeof window !== "undefined" && typeof window.location !== "undefined";
+}
+function from_global_override() {
+  if (!has_window()) return void 0;
+  const global_any = window;
+  if (typeof global_any.__VIBI_WS_URL__ === "string") {
+    return global_any.__VIBI_WS_URL__;
+  }
+  return void 0;
+}
+function normalize(value) {
+  if (value.startsWith("wss://")) {
+    return value;
+  }
+  if (value.startsWith("ws://")) {
+    return `wss://${value.slice("ws://".length)}`;
+  }
+  return `wss://${value}`;
+}
+function from_query_param() {
+  if (!has_window()) return void 0;
+  try {
+    const url = new URL(window.location.href);
+    const value = url.searchParams.get("ws");
+    if (value) {
+      return normalize(value);
+    }
+  } catch {
+  }
+  return void 0;
+}
+function detect_url() {
+  const manual = from_global_override() ?? from_query_param();
+  if (manual) {
+    return manual;
+  }
+  return REMOTE_WSS;
+}
+var WS_URL = detect_url();
+
 // src/client.ts
 var time_sync = {
   clock_offset: Infinity,
@@ -9,7 +52,7 @@ var time_sync = {
   request_sent_at: 0,
   last_ping: Infinity
 };
-var ws = new WebSocket(`ws://${window.location.hostname}:8080`);
+var ws = new WebSocket(WS_URL);
 var room_watchers = /* @__PURE__ */ new Map();
 var is_synced = false;
 var sync_listeners = [];
@@ -495,3 +538,4 @@ function render() {
 export {
   create_game
 };
+//# sourceMappingURL=index.js.map
