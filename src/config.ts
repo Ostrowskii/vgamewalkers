@@ -1,4 +1,4 @@
-const REMOTE_WSS = "wss://game.vibistudiotest.site";
+const REMOTE_WSS = "wss://vibistudiotest.site";
 
 function has_window(): boolean {
   return typeof window !== "undefined" && typeof window.location !== "undefined";
