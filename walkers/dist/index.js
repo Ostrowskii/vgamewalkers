@@ -3,7 +3,7 @@ var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { en
 var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
 
 // src/config.ts
-var REMOTE_WSS = "wss://vibistudiotest.site";
+var REMOTE_WSS = "wss://game.vibistudiotest.site";
 function has_window() {
   return typeof window !== "undefined" && typeof window.location !== "undefined";
 }
