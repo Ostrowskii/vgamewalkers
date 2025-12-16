@@ -120,10 +120,18 @@ if (!nick || nick.length !== 1) {
 console.log("[GAME] Room:", room, "Nick:", nick);
 
 const smooth = (past: GameState, curr: GameState): GameState => {
-  if (curr[nick]) {
-    past[nick] = curr[nick];
+  // Keep cache intact: copy past, then override own nick with current state if present.
+  const out: GameState = {};
+
+  for (const [char, player] of Object.entries(past)) {
+    out[char] = { ...player };
   }
-  return past;
+
+  if (curr[nick]) {
+    out[nick] = { ...curr[nick] };
+  }
+
+  return out;
 };
 
 const game: Vibi<GameState, GamePost> = create_game(room, smooth);

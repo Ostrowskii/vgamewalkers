@@ -37,6 +37,30 @@ export class Vibi<S, P> {
     return this.time_to_tick(this.official_time(post));
   }
 
+  // Drop any lingering local predictions for the same player up to the official time.
+  // Returns the earliest tick affected (for cache invalidation), or null if none removed.
+  private drop_local_predictions(player_id: string | undefined, official_time: number): number | null {
+    if (!player_id) return null;
+
+    let earliest_tick: number | null = null;
+
+    for (const [name, local_post] of this.local_posts.entries()) {
+      const pdata: any = local_post.data as any;
+      const lp_player: string | undefined = (pdata && (pdata.player ?? pdata.nick)) as string | undefined;
+      if (lp_player === player_id && local_post.client_time <= official_time) {
+        this.local_posts.delete(name);
+        const tick = this.official_tick(local_post);
+        earliest_tick = earliest_tick === null ? tick : Math.min(earliest_tick, tick);
+      }
+    }
+
+    if (earliest_tick !== null) {
+      this.invalidate_cache(earliest_tick);
+    }
+
+    return earliest_tick;
+  }
+
   // Reset all cached states.
   private reset_cache(): void {
     this.state_cache.length = 0;
@@ -60,6 +84,27 @@ export class Vibi<S, P> {
     if (drop_from < this.state_cache.length) {
       this.state_cache.length = drop_from;
     }
+  }
+
+  // Remove stale local predictions older than the specified age (ms).
+  // Returns the earliest tick affected, or null if none removed.
+  private prune_stale_local_predictions(max_age_ms: number = 10_000): number | null {
+    const now = this.server_time();
+    let earliest_tick: number | null = null;
+
+    for (const [name, local_post] of this.local_posts.entries()) {
+      if (now - local_post.client_time >= max_age_ms) {
+        this.local_posts.delete(name);
+        const tick = this.official_tick(local_post);
+        earliest_tick = earliest_tick === null ? tick : Math.min(earliest_tick, tick);
+      }
+    }
+
+    if (earliest_tick !== null) {
+      this.invalidate_cache(earliest_tick);
+    }
+
+    return earliest_tick;
   }
 
   // Invalidate the cached timeline so it will be rebuilt lazily.
@@ -94,14 +139,32 @@ export class Vibi<S, P> {
       console.log(`[VIBI] synced; watching+loading room=${this.room}`);
       // Watch the room with callback
       client.watch(this.room, (post) => {
+        // Drop stale muletas (>=10s old) and track earliest invalidation tick.
+        const prune_tick = this.prune_stale_local_predictions();
+
         const official_tick = this.official_tick(post);
+        const official_time = this.official_time(post);
+        const pdata: any = post.data as any;
+        const player_id: string | undefined = (pdata && (pdata.player ?? pdata.nick)) as string | undefined;
+        let invalidate_from: number | null = prune_tick;
 
         // If this official post matches a local predicted one, drop the local copy
         if (post.name && this.local_posts.has(post.name)) {
+          const local_post = this.local_posts.get(post.name)!;
           this.local_posts.delete(post.name);
+          const tick = this.official_tick(local_post);
+          invalidate_from = invalidate_from === null ? tick : Math.min(invalidate_from, tick);
         }
+
+        // Drop any lingering local predictions for the same player up to this official time.
+        const drop_tick = this.drop_local_predictions(player_id, official_time);
+        if (drop_tick !== null) {
+          invalidate_from = invalidate_from === null ? drop_tick : Math.min(invalidate_from, drop_tick);
+        }
+
         this.room_posts.set(post.index, post);
-        this.invalidate_cache(official_tick);
+        const target_tick = invalidate_from === null ? official_tick : Math.min(invalidate_from, official_tick);
+        this.invalidate_cache(target_tick);
       });
 
       // Load all existing posts

@@ -196,12 +196,25 @@ var Vibi = class {
     on_sync(() => {
       console.log(`[VIBI] synced; watching+loading room=${this.room}`);
       watch(this.room, (post2) => {
+        const prune_tick = this.prune_stale_local_predictions();
         const official_tick = this.official_tick(post2);
+        const official_time = this.official_time(post2);
+        const pdata = post2.data;
+        const player_id = pdata && (pdata.player ?? pdata.nick);
+        let invalidate_from = prune_tick;
         if (post2.name && this.local_posts.has(post2.name)) {
+          const local_post = this.local_posts.get(post2.name);
           this.local_posts.delete(post2.name);
+          const tick = this.official_tick(local_post);
+          invalidate_from = invalidate_from === null ? tick : Math.min(invalidate_from, tick);
+        }
+        const drop_tick = this.drop_local_predictions(player_id, official_time);
+        if (drop_tick !== null) {
+          invalidate_from = invalidate_from === null ? drop_tick : Math.min(invalidate_from, drop_tick);
         }
         this.room_posts.set(post2.index, post2);
-        this.invalidate_cache(official_tick);
+        const target_tick = invalidate_from === null ? official_tick : Math.min(invalidate_from, official_tick);
+        this.invalidate_cache(target_tick);
       });
       load(this.room, 0);
     });
@@ -218,6 +231,43 @@ var Vibi = class {
   // Convert a post into its authoritative tick.
   official_tick(post2) {
     return this.time_to_tick(this.official_time(post2));
+  }
+  // Drop any lingering local predictions for the same player up to the official time.
+  // Returns the earliest tick affected (for cache invalidation), or null if none removed.
+  drop_local_predictions(player_id, official_time2) {
+    if (!player_id)
+      return null;
+    let earliest_tick = null;
+    for (const [name, local_post] of this.local_posts.entries()) {
+      const pdata = local_post.data;
+      const lp_player = pdata && (pdata.player ?? pdata.nick);
+      if (lp_player === player_id && local_post.client_time <= official_time2) {
+        this.local_posts.delete(name);
+        const tick = this.official_tick(local_post);
+        earliest_tick = earliest_tick === null ? tick : Math.min(earliest_tick, tick);
+      }
+    }
+    if (earliest_tick !== null) {
+      this.invalidate_cache(earliest_tick);
+    }
+    return earliest_tick;
+  }
+  // Remove stale local predictions older than the specified age (ms).
+  // Returns the earliest tick affected, or null if none removed.
+  prune_stale_local_predictions(max_age_ms = 1e4) {
+    const now2 = this.server_time();
+    let earliest_tick = null;
+    for (const [name, local_post] of this.local_posts.entries()) {
+      if (now2 - local_post.client_time >= max_age_ms) {
+        this.local_posts.delete(name);
+        const tick = this.official_tick(local_post);
+        earliest_tick = earliest_tick === null ? tick : Math.min(earliest_tick, tick);
+      }
+    }
+    if (earliest_tick !== null) {
+      this.invalidate_cache(earliest_tick);
+    }
+    return earliest_tick;
   }
   // Reset all cached states.
   reset_cache() {
@@ -470,10 +520,14 @@ if (!nick || nick.length !== 1) {
 }
 console.log("[GAME] Room:", room, "Nick:", nick);
 var smooth = (past, curr) => {
-  if (curr[nick]) {
-    past[nick] = curr[nick];
+  const out = {};
+  for (const [char, player] of Object.entries(past)) {
+    out[char] = { ...player };
   }
-  return past;
+  if (curr[nick]) {
+    out[nick] = { ...curr[nick] };
+  }
+  return out;
 };
 var game = create_game(room, smooth);
 document.title = `Walkers ${package_default.version}`;
