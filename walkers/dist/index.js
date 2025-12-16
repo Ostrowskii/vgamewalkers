@@ -234,31 +234,13 @@ var Vibi = class {
   }
   // Drop any lingering local predictions for the same player up to the official time.
   // Returns the earliest tick affected (for cache invalidation), or null if none removed.
-  drop_local_predictions(player_id, official_time2) {
-    if (!player_id)
-      return null;
+  drop_local_predictions(player_id, official_time) {
+    if (!player_id) return null;
     let earliest_tick = null;
     for (const [name, local_post] of this.local_posts.entries()) {
       const pdata = local_post.data;
       const lp_player = pdata && (pdata.player ?? pdata.nick);
-      if (lp_player === player_id && local_post.client_time <= official_time2) {
-        this.local_posts.delete(name);
-        const tick = this.official_tick(local_post);
-        earliest_tick = earliest_tick === null ? tick : Math.min(earliest_tick, tick);
-      }
-    }
-    if (earliest_tick !== null) {
-      this.invalidate_cache(earliest_tick);
-    }
-    return earliest_tick;
-  }
-  // Remove stale local predictions older than the specified age (ms).
-  // Returns the earliest tick affected, or null if none removed.
-  prune_stale_local_predictions(max_age_ms = 1e4) {
-    const now2 = this.server_time();
-    let earliest_tick = null;
-    for (const [name, local_post] of this.local_posts.entries()) {
-      if (now2 - local_post.client_time >= max_age_ms) {
+      if (lp_player === player_id && local_post.client_time <= official_time) {
         this.local_posts.delete(name);
         const tick = this.official_tick(local_post);
         earliest_tick = earliest_tick === null ? tick : Math.min(earliest_tick, tick);
@@ -288,6 +270,23 @@ var Vibi = class {
     if (drop_from < this.state_cache.length) {
       this.state_cache.length = drop_from;
     }
+  }
+  // Remove stale local predictions older than the specified age (ms).
+  // Returns the earliest tick affected, or null if none removed.
+  prune_stale_local_predictions(max_age_ms = 1e4) {
+    const now2 = this.server_time();
+    let earliest_tick = null;
+    for (const [name, local_post] of this.local_posts.entries()) {
+      if (now2 - local_post.client_time >= max_age_ms) {
+        this.local_posts.delete(name);
+        const tick = this.official_tick(local_post);
+        earliest_tick = earliest_tick === null ? tick : Math.min(earliest_tick, tick);
+      }
+    }
+    if (earliest_tick !== null) {
+      this.invalidate_cache(earliest_tick);
+    }
+    return earliest_tick;
   }
   // Invalidate the cached timeline so it will be rebuilt lazily.
   invalidate_timeline() {
