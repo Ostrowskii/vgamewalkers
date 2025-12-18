@@ -196,12 +196,11 @@ var Vibi = class {
     on_sync(() => {
       console.log(`[VIBI] synced; watching+loading room=${this.room}`);
       watch(this.room, (post2) => {
-        const prune_tick = this.prune_stale_local_predictions();
         const official_tick = this.official_tick(post2);
         const official_time = this.official_time(post2);
         const pdata = post2.data;
         const player_id = pdata && (pdata.player ?? pdata.nick);
-        let invalidate_from = prune_tick;
+        let invalidate_from = null;
         if (post2.name && this.local_posts.has(post2.name)) {
           const local_post = this.local_posts.get(post2.name);
           this.local_posts.delete(post2.name);
@@ -270,23 +269,6 @@ var Vibi = class {
     if (drop_from < this.state_cache.length) {
       this.state_cache.length = drop_from;
     }
-  }
-  // Remove stale local predictions older than the specified age (ms).
-  // Returns the earliest tick affected, or null if none removed.
-  prune_stale_local_predictions(max_age_ms = 1e4) {
-    const now2 = this.server_time();
-    let earliest_tick = null;
-    for (const [name, local_post] of this.local_posts.entries()) {
-      if (now2 - local_post.client_time >= max_age_ms) {
-        this.local_posts.delete(name);
-        const tick = this.official_tick(local_post);
-        earliest_tick = earliest_tick === null ? tick : Math.min(earliest_tick, tick);
-      }
-    }
-    if (earliest_tick !== null) {
-      this.invalidate_cache(earliest_tick);
-    }
-    return earliest_tick;
   }
   // Invalidate the cached timeline so it will be rebuilt lazily.
   invalidate_timeline() {

@@ -86,27 +86,6 @@ export class Vibi<S, P> {
     }
   }
 
-  // Remove stale local predictions older than the specified age (ms).
-  // Returns the earliest tick affected, or null if none removed.
-  private prune_stale_local_predictions(max_age_ms: number = 10_000): number | null {
-    const now = this.server_time();
-    let earliest_tick: number | null = null;
-
-    for (const [name, local_post] of this.local_posts.entries()) {
-      if (now - local_post.client_time >= max_age_ms) {
-        this.local_posts.delete(name);
-        const tick = this.official_tick(local_post);
-        earliest_tick = earliest_tick === null ? tick : Math.min(earliest_tick, tick);
-      }
-    }
-
-    if (earliest_tick !== null) {
-      this.invalidate_cache(earliest_tick);
-    }
-
-    return earliest_tick;
-  }
-
   // Invalidate the cached timeline so it will be rebuilt lazily.
   private invalidate_timeline(): void {
     this.timeline = null;
@@ -139,14 +118,11 @@ export class Vibi<S, P> {
       console.log(`[VIBI] synced; watching+loading room=${this.room}`);
       // Watch the room with callback
       client.watch(this.room, (post) => {
-        // Drop stale muletas (>=10s old) and track earliest invalidation tick.
-        const prune_tick = this.prune_stale_local_predictions();
-
         const official_tick = this.official_tick(post);
         const official_time = this.official_time(post);
         const pdata: any = post.data as any;
         const player_id: string | undefined = (pdata && (pdata.player ?? pdata.nick)) as string | undefined;
-        let invalidate_from: number | null = prune_tick;
+        let invalidate_from: number | null = null;
 
         // If this official post matches a local predicted one, drop the local copy
         if (post.name && this.local_posts.has(post.name)) {
